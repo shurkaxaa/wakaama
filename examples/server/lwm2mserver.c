@@ -144,7 +144,23 @@ static void prv_dump_binding(lwm2m_binding_t binding)
     }
 }
 
-static void prv_dump_client(lwm2m_client_t * targetP)
+static void prv_notify_callback(uint16_t clientID,
+                                lwm2m_uri_t *uriP,
+                                int count,
+                                lwm2m_media_type_t format,
+                                uint8_t *data,
+                                int dataLength,
+                                void *userData);
+
+static void prv_result_callback(uint16_t clientID,
+                                lwm2m_uri_t *uriP,
+                                int status,
+                                lwm2m_media_type_t format,
+                                uint8_t *data,
+                                int dataLength,
+                                void *userData);
+
+static void prv_dump_client(lwm2m_client_t * targetP, lwm2m_context_t *ctx)
 {
     lwm2m_client_object_t * objectP;
 
@@ -169,6 +185,43 @@ static void prv_dump_client(lwm2m_client_t * targetP)
             for (instanceP = objectP->instanceList; instanceP != NULL ; instanceP = instanceP->next)
             {
                 fprintf(stdout, "/%d/%d, ", objectP->id, instanceP->id);
+                // TODO xaa. auto-observe for all but /1/0
+                if (ctx != NULL)
+                {
+                    if (objectP->id == 1 && instanceP->id == 0)
+                    {
+                        continue;
+                    }
+                    lwm2m_uri_t uri;
+                    memset(&uri, 0xFF, sizeof(lwm2m_uri_t));
+                    uri.objectId = objectP->id;
+                    uri.instanceId = instanceP->id;
+
+                    fprintf(stdout, "Send observe to /%d/%d, ", objectP->id, instanceP->id);
+                    int result = lwm2m_observe(ctx, targetP->internalID, &uri, prv_notify_callback, NULL);
+
+                    if (result == 0)
+                    {
+                        fprintf(stdout, "OK");
+                    }
+                    else
+                    {
+                        prv_print_error(result);
+                    }
+
+                    // uri.objectId = 3;
+                    // uri.instanceId = 0;
+                    // result = lwm2m_dm_read(ctx, targetP->internalID, &uri, prv_result_callback, NULL);
+
+                    // if (result == 0)
+                    // {
+                    //     fprintf(stdout, "OK");
+                    // }
+                    // else
+                    // {
+                    //     prv_print_error(result);
+                    // }
+                }
             }
         }
     }
@@ -191,7 +244,7 @@ static void prv_output_clients(char * buffer,
 
     for (targetP = lwm2mH->clientList ; targetP != NULL ; targetP = targetP->next)
     {
-        prv_dump_client(targetP);
+        prv_dump_client(targetP, NULL);
     }
 }
 
@@ -262,6 +315,7 @@ static void prv_notify_callback(uint16_t clientID,
                                 int dataLength,
                                 void * userData)
 {
+    return;
     fprintf(stdout, "\r\nNotify from client #%d ", clientID);
     prv_printUri(uriP);
     fprintf(stdout, " number %d\r\n", count);
@@ -914,7 +968,7 @@ static void prv_monitor_callback(uint16_t clientID,
 
         targetP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)lwm2mH->clientList, clientID);
 
-        prv_dump_client(targetP);
+        prv_dump_client(targetP, lwm2mH);
         break;
 
     case COAP_202_DELETED:
@@ -926,7 +980,7 @@ static void prv_monitor_callback(uint16_t clientID,
 
         targetP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)lwm2mH->clientList, clientID);
 
-        prv_dump_client(targetP);
+        prv_dump_client(targetP, NULL);
         break;
 
     default:
@@ -1156,8 +1210,8 @@ int main(int argc, char *argv[])
                         port = saddr->sin6_port;
                     }
 
-                    fprintf(stderr, "%d bytes received from [%s]:%hu\r\n", numBytes, s, ntohs(port));
-                    output_buffer(stderr, buffer, numBytes, 0);
+//                    fprintf(stderr, "%d bytes received from [%s]:%hu\r\n", numBytes, s, ntohs(port));
+//                    output_buffer(stderr, buffer, numBytes, 0);
 
                     connP = connection_find(connList, &addr, addrLen);
                     if (connP == NULL)
