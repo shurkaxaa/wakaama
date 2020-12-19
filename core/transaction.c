@@ -105,7 +105,7 @@ Contains code snippets which are:
  */
 
 #include "internals.h"
-
+#include "log.h"
 
 /*
  * Modulo mask (+1 and +0.5 for rounding) for a random number to get the tick number for the random
@@ -123,11 +123,13 @@ static int prv_checkFinished(lwm2m_transaction_t * transacP,
 
     if (COAP_DELETE < transactionMessage->code)
     {
+        ZF_LOGD("prv_checkFinished response mID %d, ack_received %d\n", transacP->mID, transacP->ack_received);
         // response
         return transacP->ack_received ? 1 : 0;
     }
     if (!IS_OPTION(transactionMessage, COAP_OPTION_TOKEN))
     {
+        ZF_LOGD("prv_checkFinished request without token mID %d, ack_received %d\n", transacP->mID, transacP->ack_received);
         // request without token
         return transacP->ack_received ? 1 : 0;
     }
@@ -135,6 +137,9 @@ static int prv_checkFinished(lwm2m_transaction_t * transacP,
     len = coap_get_header_token(receivedMessage, &token);
     if (transactionMessage->token_len == len)
     {
+        ZF_LOGD("prv_checkFinished compare tokens %d\n", transacP->mID);
+        ZF_LOGD_MEM(transactionMessage->token, len, "transaction token (%u bytes):", len);
+        ZF_LOGD_MEM(token, len, "message token (%u bytes):", len);
         if (memcmp(transactionMessage->token, token, len)==0) return 1;
     }
 
@@ -282,6 +287,7 @@ bool transaction_handleResponse(lwm2m_context_t * contextP,
         {
             if (!transacP->ack_received)
             {
+                ZF_LOGD("Check active transaction mID %d, msg MID: %d \n", transacP->mID, message->mid);
                 if ((COAP_TYPE_ACK == message->type) || (COAP_TYPE_RST == message->type))
                 {
                     if (transacP->mID == message->mid)
@@ -302,6 +308,7 @@ bool transaction_handleResponse(lwm2m_context_t * contextP,
                 {
                     if (COAP_TYPE_CON == message->type && NULL != response)
                     {
+                        ZF_LOGE("Re-send non-reset transaction mID %d/%d\n", transacP->mID, message->mid);
                         coap_init_message(response, COAP_TYPE_ACK, 0, message->mid);
                         message_send(contextP, response, fromSessionH);
                     }
@@ -312,9 +319,12 @@ bool transaction_handleResponse(lwm2m_context_t * contextP,
             	        transacP->retrans_time += COAP_RESPONSE_TIMEOUT;
                 	    return true;
                 	}
-				}       
+				}
+
+                ZF_LOGD("prv_checkFinished complete transaction mID %d/%d\n", transacP->mID, message->mid);
                 if (transacP->callback != NULL)
                 {
+                    ZF_LOGD("Complete transaction callback %p mID %d\n", transacP, transacP->mID);
                     transacP->callback(contextP, transacP, message);
                 }
                 transaction_remove(contextP, transacP);
@@ -323,6 +333,7 @@ bool transaction_handleResponse(lwm2m_context_t * contextP,
             // if we found our guy, exit
             if (found)
             {
+                ZF_LOGD("Transaction found but not completed %p mID %d\n", transacP, transacP->mID);
                 time_t tv_sec = lwm2m_gettime();
                 if (0 <= tv_sec)
                 {
@@ -417,6 +428,8 @@ int transaction_send(lwm2m_context_t * contextP,
         if (transacP->callback)
         {
             LOG_ARG("transaction %p expired..calling callback", transacP);
+            ZF_LOGD("transaction %p id (%d) expired..calling callback - ack: %d, maxRetriesReached - %d\n",
+                transacP, transacP->mID, transacP->ack_received, maxRetriesReached);
             transacP->callback(contextP, transacP, NULL);
         }
         transaction_remove(contextP, transacP);

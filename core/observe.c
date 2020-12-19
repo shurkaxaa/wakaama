@@ -49,6 +49,7 @@
 */
 
 #include "internals.h"
+#include "log.h"
 #include <stdio.h>
 
 
@@ -895,6 +896,7 @@ static lwm2m_observation_t * prv_findObservationByURI(lwm2m_client_t * clientP,
 void observe_remove(lwm2m_observation_t * observationP)
 {
     LOG("Entering");
+    ZF_LOGD("Observation removed\n", observationP->clientP->internalID, observationP->id);
     observationP->clientP->observationList = (lwm2m_observation_t *) LWM2M_LIST_RM(observationP->clientP->observationList, observationP->id, NULL);
     lwm2m_free(observationP);
 }
@@ -915,28 +917,33 @@ static void prv_obsRequestCallback(lwm2m_context_t * contextP,
     clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)observationData->contextP->clientList, observationData->client);
     if (clientP == NULL)
     {
+        ZF_LOGD("COAP_500_INTERNAL_SERVER_ERROR\n");
         observationData->callback(observationData->client,
-                &observationData->uri,
-                COAP_500_INTERNAL_SERVER_ERROR,  //?
-                0, NULL, 0,
-                observationData->userData);
+                                  &observationData->uri,
+                                  COAP_500_INTERNAL_SERVER_ERROR, //?
+                                  0, NULL, 0,
+                                  observationData->userData);
         goto end;
     }
+    ZF_LOGD("Observe callback client %d\n", clientP->internalID);
 
     observationP = prv_findObservationByURI(clientP, uriP);
 
     // Fail it if the latest user intention is cancellation
     if(observationP && observationP->status == STATE_DEREG_PENDING)
     {
+    ZF_LOGD("Observe callback client %d COAP_400_BAD_REQUEST\n", clientP->internalID);
         code = COAP_400_BAD_REQUEST;
     }
     else if (message == NULL)
     {
+    ZF_LOGD("Observe callback client %d COAP_503_SERVICE_UNAVAILABLE\n", clientP->internalID);
         code = COAP_503_SERVICE_UNAVAILABLE;
     }
     else if (packet->code == COAP_205_CONTENT
             && !IS_OPTION(packet, COAP_OPTION_OBSERVE))
     {
+    ZF_LOGD("Observe callback client %d COAP_405_METHOD_NOT_ALLOWED\n", clientP->internalID);
         code = COAP_405_METHOD_NOT_ALLOWED;
     }
     else
@@ -944,8 +951,10 @@ static void prv_obsRequestCallback(lwm2m_context_t * contextP,
         code = packet->code;
     }
 
+    ZF_LOGD("Observe callback client %d code %d\n", clientP->internalID, code);
     if (code != COAP_205_CONTENT)
     {
+    ZF_LOGD("Observe callback client %d code %d != COAP_205_CONTENT\n", clientP->internalID, code);
         observationData->callback(clientP->internalID,
                 &observationData->uri,
                 code,
@@ -962,6 +971,7 @@ static void prv_obsRequestCallback(lwm2m_context_t * contextP,
         }
         else
         {
+    ZF_LOGD("Observation 2 removed %d/%d\n", observationP->clientP->internalID, observationP->id);
             observationP->clientP->observationList = (lwm2m_observation_t *) LWM2M_LIST_RM(observationP->clientP->observationList, observationP->id, NULL);
 
             // give the user chance to free previous observation userData
@@ -982,6 +992,7 @@ static void prv_obsRequestCallback(lwm2m_context_t * contextP,
         memcpy(&observationP->uri, uriP, sizeof(lwm2m_uri_t));
 
         observationP->clientP->observationList = (lwm2m_observation_t *)LWM2M_LIST_ADD(observationP->clientP->observationList, observationP);
+    ZF_LOGD("Observation added %d/%d\n", observationP->clientP->internalID, observationP->id);
 
         observationData->callback(observationData->client,
                 &observationData->uri,
@@ -1118,6 +1129,7 @@ int lwm2m_observe(lwm2m_context_t * contextP,
     if(observationP) observationP->status = STATE_REG_PENDING;
 
     int ret = transaction_send(contextP, transactionP);
+    ZF_LOGD("Send observe transaction mID: %d", transactionP->mID);
     if (ret != 0)
     {
         LOG("transaction_send failed!");
@@ -1237,11 +1249,13 @@ bool observe_handleNotify(lwm2m_context_t * contextP,
     observationP = (lwm2m_observation_t *)lwm2m_list_find((lwm2m_list_t *)clientP->observationList, obsID);
     if (observationP == NULL)
     {
+        ZF_LOGD("can not find observation, resetting: %d/%d\n", clientID, obsID);
         coap_init_message(response, COAP_TYPE_RST, 0, message->mid);
         message_send(contextP, response, fromSessionH);
     }
     else
     {
+        ZF_LOGD("observation found, accepting: %d/%d\n", clientID, obsID);
         if (message->type == COAP_TYPE_CON ) {
             coap_init_message(response, COAP_TYPE_ACK, 0, message->mid);
             message_send(contextP, response, fromSessionH);

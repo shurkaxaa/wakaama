@@ -8,6 +8,8 @@ set(WAKAAMA_SOURCES_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 set(EXT_SOURCES 
     ${WAKAAMA_SOURCES_DIR}/er-coap-13/er-coap-13.c
+    ${WAKAAMA_SOURCES_DIR}/zf_log.c
+	${WAKAAMA_SOURCES_DIR}/zf_log.h
 	${WAKAAMA_SOURCES_DIR}/er-coap-13/er-coap-13.h)
 
 set(CORE_HEADERS
