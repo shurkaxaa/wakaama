@@ -1,5 +1,6 @@
 # Object files, release bundles
 *.o
+*.so
 *.lo
 *~
 *.la
@@ -16,6 +17,7 @@
 
 # QtCreator
 build-*
+build
 
 # In source build
 Makefile
