@@ -35,3 +35,7 @@ core/cmake_install.cmake
 lwm2mclient
 lwm2mserver
 tlvdecode
+
+!lib/Makefile
+!goserver/Makefile
+!server/Makefile

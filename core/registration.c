@@ -1701,6 +1701,12 @@ uint8_t registration_handleRequest(lwm2m_context_t * contextP,
             clientP->objectList = objects;
             clientP->sessionH = fromSessionH;
 
+            if (contextP->aaCallback != NULL) {
+                if (contextP->aaCallback(name, message->auth_code, message->auth_code_len, contextP->aaUserData) != 0) {
+                    return COAP_403_FORBIDDEN;
+                }
+            }
+
             if (prv_getLocationString(clientP->internalID, location) == 0)
             {
                 registration_freeClient(clientP);
@@ -1830,6 +1836,12 @@ uint8_t registration_handleRequest(lwm2m_context_t * contextP,
     }
 
     return result;
+}
+
+void lwm2m_set_aa_callback(lwm2m_context_t * contextP, lwm2m_aa_callback_t callback, void * userData)
+{
+    contextP->aaCallback = callback;
+    contextP->aaUserData = userData;
 }
 
 void lwm2m_set_monitoring_callback(lwm2m_context_t * contextP,

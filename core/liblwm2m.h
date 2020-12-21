@@ -169,6 +169,7 @@ bool lwm2m_session_is_equal(void * session1, void * session2, void * userData);
 #define COAP_400_BAD_REQUEST            (uint8_t)0x80
 #define COAP_401_UNAUTHORIZED           (uint8_t)0x81
 #define COAP_402_BAD_OPTION             (uint8_t)0x82
+#define COAP_403_FORBIDDEN              (uint8_t)0x83
 #define COAP_404_NOT_FOUND              (uint8_t)0x84
 #define COAP_405_METHOD_NOT_ALLOWED     (uint8_t)0x85
 #define COAP_406_NOT_ACCEPTABLE         (uint8_t)0x86
@@ -554,6 +555,8 @@ typedef struct _lwm2m_context_ lwm2m_context_t;
  */
 typedef void (*lwm2m_result_callback_t) (uint16_t clientID, lwm2m_uri_t * uriP, int status, lwm2m_media_type_t format, uint8_t * data, int dataLength, void * userData);
 
+typedef int (*lwm2m_aa_callback_t) (char *endpointName, uint8_t *authCode, size_t authCodeLen, void *userData);
+
 /*
  * LWM2M Observations
  *
@@ -735,7 +738,9 @@ struct _lwm2m_context_
 #ifdef LWM2M_SERVER_MODE
     lwm2m_client_t *        clientList;
     lwm2m_result_callback_t monitorCallback;
-    void *                  monitorUserData;
+    void *monitorUserData;
+    lwm2m_aa_callback_t     aaCallback;
+    void *aaUserData;
 #endif
 #ifdef LWM2M_BOOTSTRAP_SERVER_MODE
     lwm2m_bootstrap_callback_t bootstrapCallback;
@@ -782,6 +787,7 @@ void lwm2m_resource_value_changed(lwm2m_context_t * contextP, lwm2m_uri_t * uriP
 // The callback's parameters uri, data, dataLength are always NULL.
 // The lwm2m_client_t is present in the lwm2m_context_t's clientList when the callback is called. On a deregistration, it deleted when the callback returns.
 void lwm2m_set_monitoring_callback(lwm2m_context_t * contextP, lwm2m_result_callback_t callback, void * userData);
+void lwm2m_set_aa_callback(lwm2m_context_t * contextP, lwm2m_aa_callback_t callback, void * userData);
 
 // Device Management APIs
 int lwm2m_dm_read(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP, lwm2m_result_callback_t callback, void * userData);

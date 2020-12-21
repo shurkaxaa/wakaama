@@ -262,6 +262,9 @@ typedef struct {
   uint16_t payload_len;
   uint8_t *payload;
 
+  size_t auth_code_len;
+  uint8_t *auth_code;
+
 } coap_packet_t;
 
 /* Option format serialization*/

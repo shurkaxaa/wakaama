@@ -1222,6 +1222,7 @@ int run_server(Callbacks cb)
     fflush(stdout);
 
     lwm2m_set_monitoring_callback(lwm2mH, prv_monitor_callback, &monitorUserData);
+    lwm2m_set_aa_callback(lwm2mH, cb.aaCallback, NULL);
 
     while (0 == g_quit)
     {

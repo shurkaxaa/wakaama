@@ -831,9 +831,8 @@ coap_parse_message(void *packet, uint8_t *data, uint16_t data_len)
         PRINTF("Size [%lu]\n", coap_pkt->size);
         break;
       case COAP_OPTION_NBAUTH:
-        /* coap_merge_multi_option() operates in-place on the IPBUF, but final packet field should be const string -> cast to string */
-        // coap_merge_multi_option( (char **) &(coap_pkt->uri_path), &(coap_pkt->uri_path_len), current_option, option_length, 0);
-        // coap_add_multi_option( &(coap_pkt->uri_path), current_option, option_length, 1);
+        coap_pkt->auth_code = current_option;
+        coap_pkt->auth_code_len = option_length;
         PRINTF("NBAuth [%.*s]\n", option_length, current_option);
         break;
       default:

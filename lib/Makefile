@@ -1,0 +1,26 @@
+SHELL = /bin/sh
+CC    = gcc
+FLAGS        = #-std=gnu99 -Iinclude
+CFLAGS       = -I ../core -I ../examples/shared -fPIC -g -DLWM2M_SERVER_MODE -DLWM2M_LITTLE_ENDIAN
+DEBUGFLAGS   = -O0 -D _DEBUG
+RELEASEFLAGS = -O2 -D NDEBUG -combine -fwhole-program
+LDFLAGS      = -shared
+
+TARGET  = ../build/libwakaama.so
+SOURCES = $(shell echo ../core/*.c ../examples/shared/*.c ../core/er-coap-13/*.c *.c)
+HEADERS = $(shell echo ../core/*.h ../examples/shared/*.h ../core/er-coap-13/*.h *.h)
+OBJECTS = $(SOURCES:.c=.o)
+
+PREFIX = $(DESTDIR)/usr/local
+BINDIR = $(PREFIX)/bin
+
+all: $(TARGET)
+
+$(TARGET): $(OBJECTS)
+	mkdir -p ../build
+	$(CC) $(FLAGS) $(CFLAGS) $(DEBUGFLAGS) -o $(TARGET) $(OBJECTS) $(LDFLAGS)
+
+.PHONY : clean
+
+clean:
+	rm -f $(OBJECTS) $(TARGET)
