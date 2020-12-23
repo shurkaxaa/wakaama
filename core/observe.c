@@ -916,8 +916,8 @@ static void prv_obsRequestCallback(lwm2m_context_t * contextP,
 
     // clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)observationData->contextP->clientList, observationData->client);
     clientP = lookup_client(observationData->contextP, observationData->client);
-    {
     if (clientP == NULL)
+    {
         ZF_LOGD("COAP_500_INTERNAL_SERVER_ERROR\n");
         observationData->callback(observationData->client,
                                   &observationData->uri,
