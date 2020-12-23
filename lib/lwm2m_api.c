@@ -74,6 +74,7 @@
 
 #include "commandline.h"
 #include "connection.h"
+#include "hashmap.h"
 #include "log.h"
 
 #define MAX_PACKET_SIZE 1024
@@ -176,8 +177,10 @@ static void prv_dump_client(lwm2m_client_t *targetP, lwm2m_context_t *ctx, Callb
     fprintf(stdout, "\tname: \"%s\"\r\n", targetP->name);
     fprintf(stdout, "\tversion: \"%s\"\r\n", prv_dump_version(targetP->version));
     prv_dump_binding(targetP->binding);
-    if (targetP->msisdn) fprintf(stdout, "\tmsisdn: \"%s\"\r\n", targetP->msisdn);
-    if (targetP->altPath) fprintf(stdout, "\talternative path: \"%s\"\r\n", targetP->altPath);
+    if (targetP->msisdn)
+        fprintf(stdout, "\tmsisdn: \"%s\"\r\n", targetP->msisdn);
+    if (targetP->altPath)
+        fprintf(stdout, "\talternative path: \"%s\"\r\n", targetP->altPath);
     fprintf(stdout, "\tlifetime: %d sec\r\n", targetP->lifetime);
     fprintf(stdout, "\tobjects: ");
 
@@ -980,14 +983,14 @@ syntax_error:
 
 int registration_callback(lwm2m_context_t *contextP, lwm2m_client_t *targetP, void *userData)
 {
-    printf("===================== registration_callback ====================== %p %p %p\n", contextP, targetP, userData);
+    ZF_LOGD("===================== registration_callback ====================== %p %p %p\n", contextP, targetP, userData);
     lwm2m_client_object_t *objectP;
     MonitorData *md = (MonitorData *)userData;
     for (objectP = targetP->objectList; objectP != NULL; objectP = objectP->next)
     {
         if (objectP->instanceList == NULL)
         {
-            fprintf(stdout, "/%d, ", objectP->id);
+            ZF_LOGD("/%d, ", objectP->id);
         }
         else
         {
@@ -1099,6 +1102,24 @@ void print_usage(void)
     fprintf(stdout, "\r\n");
 }
 
+uint64_t conn_hash(const void *item, uint64_t seed0, uint64_t seed1)
+{
+    const connection_t *conn = *(connection_t **)item;
+    uint64_t rv = hashmap_sip(conn->mapKey, conn->addrLen, seed0, seed1);
+    return rv;
+}
+
+int conn_compare(const void *a, const void *b, void *udata)
+{
+    const connection_t *ua = *(connection_t **)a;
+    const connection_t *ub = *(connection_t **)b;
+    if (ua->addrLen != ub->addrLen)
+    {
+        return ua->addrLen > ub->addrLen ? -1 : 1;
+    }
+    return memcmp(ua->mapKey, ub->mapKey, ua->addrLen);
+}
+
 int run_server(Callbacks cb)
 {
     int sock;
@@ -1110,12 +1131,15 @@ int run_server(Callbacks cb)
     lwm2m_context_t *lwm2mH = NULL;
     int i;
     connection_t *connList = NULL;
+    struct hashmap *connMap;
     int addressFamily = AF_INET6;
     int opt;
     const char *localPort = LWM2M_STANDARD_PORT_STR;
     MonitorData monitorUserData;
     monitorUserData.cb = &cb;
     monitorUserData.lwm2mH = NULL;
+
+    connMap = hashmap_new(sizeof(connection_t *), 0, 0, 0, conn_hash, conn_compare, NULL);
 
     command_desc_t commands[] =
         {
@@ -1296,7 +1320,8 @@ int run_server(Callbacks cb)
                 {
                     char s[INET6_ADDRSTRLEN];
                     in_port_t port;
-                    connection_t *connP;
+                    connection_t **mapP;
+                    connection_t *connP, *connFilterP;
 
                     s[0] = 0;
                     if (AF_INET == addr.ss_family)
@@ -1314,16 +1339,35 @@ int run_server(Callbacks cb)
 
                     //                    fprintf(stderr, "%d bytes received from [%s]:%hu\r\n", numBytes, s, ntohs(port));
                     //                    output_buffer(stderr, buffer, numBytes, 0);
-
-                    connP = connection_find(connList, &addr, addrLen);
-                    if (connP == NULL)
+                    connFilterP = &(connection_t){.mapKey = &addr, .addrLen = addrLen};
+                    mapP = (connection_t **)hashmap_get(connMap, &connFilterP);
+                    if (mapP != NULL) {
+                        ZF_LOGD("Connection pointer found in MAP %p>>>>>>>>>>>>>>>>>>\n", connP);
+                        connP = *mapP;
+                    } else {
+                        connP = NULL;
+                    }
+                    if (connP != NULL)
                     {
-                        connP = connection_new_incoming(connList, sock, (struct sockaddr *)&addr, addrLen);
-                        if (connP != NULL)
+                        ZF_LOGD("Connection found in MAP %p>>>>>>>>>>>>>>>>>>\n", connP);
+                    }
+                    else
+                    {
+                        ZF_LOGD("Connection not found in MAP, fallback to list? >>>>>>>>>>>>>>>>>>\n");
+                        connP = connection_find(connList, &addr, addrLen);
+                        if (connP == NULL)
                         {
-                            connList = connP;
+                            connP = connection_new_incoming(connList, sock, (struct sockaddr *)&addr, addrLen);
+                            ZF_LOGD("Connection allocated %p>>>>>>>>>>>>>>>>>>\n", connP);
+                            hashmap_set(connMap, &connP);
+                            if (connP != NULL)
+                            {
+                                connList = connP;
+                            }
                         }
                     }
+
+                    ZF_LOGD("Connection found %p>>>>>>>>>>>>>>>>>>\n", connP);
                     if (connP != NULL)
                     {
                         lwm2m_handle_packet(lwm2mH, buffer, numBytes, connP);
@@ -1364,5 +1408,6 @@ int run_server(Callbacks cb)
     }
 #endif
 
+    hashmap_free(connMap);
     return 0;
 }

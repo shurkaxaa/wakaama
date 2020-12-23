@@ -40,6 +40,7 @@ typedef struct _connection_t
     int                     sock;
     struct sockaddr_in6     addr;
     size_t                  addrLen;
+    void                    *mapKey;
 } connection_t;
 
 int create_socket(const char * portStr, int ai_family);

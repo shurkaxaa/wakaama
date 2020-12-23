@@ -91,6 +91,7 @@ connection_t * connection_new_incoming(connection_t * connList,
         memcpy(&(connP->addr), addr, addrLen);
         connP->addrLen = addrLen;
         connP->next = connList;
+        connP->mapKey = &(connP->addr);
     }
 
     return connP;
