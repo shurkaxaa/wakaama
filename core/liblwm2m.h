@@ -635,6 +635,11 @@ typedef struct _lwm2m_client_
     uint16_t                observationId;
 } lwm2m_client_t;
 
+typedef int (*lwm2m_registered_callback_t) (lwm2m_context_t *contextP, lwm2m_client_t *device, void *userData);
+
+lwm2m_client_t *lookup_client(lwm2m_context_t *contextP, uint16_t id);
+void add_client(lwm2m_context_t *contextP, lwm2m_client_t *client);
+void remove_client(lwm2m_context_t *contextP, uint16_t id);
 
 /*
  * LWM2M transaction
@@ -736,11 +741,14 @@ struct _lwm2m_context_
     lwm2m_observed_t *   observedList;
 #endif
 #ifdef LWM2M_SERVER_MODE
-    lwm2m_client_t *        clientList;
+    lwm2m_client_t *        clientListX;
+    struct hashmap *clientMapX;
     lwm2m_result_callback_t monitorCallback;
     void *monitorUserData;
     lwm2m_aa_callback_t     aaCallback;
     void *aaUserData;
+    lwm2m_registered_callback_t     registeredCallback;
+    void *registeredUserData;
 #endif
 #ifdef LWM2M_BOOTSTRAP_SERVER_MODE
     lwm2m_bootstrap_callback_t bootstrapCallback;
@@ -788,6 +796,7 @@ void lwm2m_resource_value_changed(lwm2m_context_t * contextP, lwm2m_uri_t * uriP
 // The lwm2m_client_t is present in the lwm2m_context_t's clientList when the callback is called. On a deregistration, it deleted when the callback returns.
 void lwm2m_set_monitoring_callback(lwm2m_context_t * contextP, lwm2m_result_callback_t callback, void * userData);
 void lwm2m_set_aa_callback(lwm2m_context_t * contextP, lwm2m_aa_callback_t callback, void * userData);
+void lwm2m_set_registered_callback(lwm2m_context_t * contextP, lwm2m_registered_callback_t callback, void * userData);
 
 // Device Management APIs
 int lwm2m_dm_read(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP, lwm2m_result_callback_t callback, void * userData);

@@ -1537,7 +1537,8 @@ static lwm2m_client_t * prv_getClientByName(lwm2m_context_t * contextP,
 {
     lwm2m_client_t * targetP;
 
-    targetP = contextP->clientList;
+    // TODO, hashmap
+    targetP = contextP->clientListX;
     while (targetP != NULL && strcmp(name, targetP->name) != 0)
     {
         targetP = targetP->next;
@@ -1687,8 +1688,8 @@ uint8_t registration_handleRequest(lwm2m_context_t * contextP,
                     return COAP_500_INTERNAL_SERVER_ERROR;
                 }
                 memset(clientP, 0, sizeof(lwm2m_client_t));
-                clientP->internalID = lwm2m_list_newId((lwm2m_list_t *)contextP->clientList);
-                contextP->clientList = (lwm2m_client_t *)LWM2M_LIST_ADD(contextP->clientList, clientP);
+                clientP->internalID = lwm2m_list_newId((lwm2m_list_t *)contextP->clientListX);
+                contextP->clientListX = (lwm2m_client_t *)LWM2M_LIST_ADD(contextP->clientListX, clientP);
             }
             clientP->name = name;
             clientP->version = version;
@@ -1701,6 +1702,7 @@ uint8_t registration_handleRequest(lwm2m_context_t * contextP,
             clientP->objectList = objects;
             clientP->sessionH = fromSessionH;
 
+            add_client(contextP, clientP);
             if (contextP->aaCallback != NULL) {
                 if (contextP->aaCallback(name, message->auth_code, message->auth_code_len, contextP->aaUserData) != 0) {
                     return COAP_403_FORBIDDEN;
@@ -1722,6 +1724,10 @@ uint8_t registration_handleRequest(lwm2m_context_t * contextP,
             {
                 contextP->monitorCallback(clientP->internalID, NULL, COAP_201_CREATED, LWM2M_CONTENT_TEXT, NULL, 0, contextP->monitorUserData);
             }
+            if (contextP->registeredCallback != NULL)
+            {
+                contextP->registeredCallback(contextP, clientP, contextP->registeredUserData);
+            }
             result = COAP_201_CREATED;
         }
         else
@@ -1729,7 +1735,8 @@ uint8_t registration_handleRequest(lwm2m_context_t * contextP,
             // Registration update
             if (LWM2M_URI_IS_SET_INSTANCE(uriP)) return COAP_400_BAD_REQUEST;
 
-            clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)contextP->clientList, uriP->objectId);
+            // clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)contextP->clientList, uriP->objectId);
+            clientP = lookup_client(contextP, uriP->objectId);
             if (clientP == NULL) return COAP_404_NOT_FOUND;
 
             // Endpoint client name MUST NOT be present
@@ -1820,8 +1827,10 @@ uint8_t registration_handleRequest(lwm2m_context_t * contextP,
         if (!LWM2M_URI_IS_SET_OBJECT(uriP)) return COAP_400_BAD_REQUEST;
         if (LWM2M_URI_IS_SET_INSTANCE(uriP)) return COAP_400_BAD_REQUEST;
 
-        contextP->clientList = (lwm2m_client_t *)LWM2M_LIST_RM(contextP->clientList, uriP->objectId, &clientP);
-        if (clientP == NULL) return COAP_400_BAD_REQUEST;
+        contextP->clientListX = (lwm2m_client_t *)LWM2M_LIST_RM(contextP->clientListX, uriP->objectId, &clientP);
+        remove_client(contextP, uriP->objectId);
+        if (clientP == NULL)
+            return COAP_400_BAD_REQUEST;
         if (contextP->monitorCallback != NULL)
         {
             contextP->monitorCallback(clientP->internalID, NULL, COAP_202_DELETED, LWM2M_CONTENT_TEXT, NULL, 0, contextP->monitorUserData);
@@ -1842,6 +1851,12 @@ void lwm2m_set_aa_callback(lwm2m_context_t * contextP, lwm2m_aa_callback_t callb
 {
     contextP->aaCallback = callback;
     contextP->aaUserData = userData;
+}
+
+void lwm2m_set_registered_callback(lwm2m_context_t * contextP, lwm2m_registered_callback_t callback, void * userData)
+{
+    contextP->registeredCallback = callback;
+    contextP->registeredUserData = userData;
 }
 
 void lwm2m_set_monitoring_callback(lwm2m_context_t * contextP,
@@ -1940,14 +1955,16 @@ void registration_step(lwm2m_context_t * contextP,
 
     LOG("Entering");
     // monitor clients lifetime
-    clientP = contextP->clientList;
+    // TODO, optimize? check all clients EOL on each packet/transaction?
+    clientP = contextP->clientListX;
     while (clientP != NULL)
     {
         lwm2m_client_t * nextP = clientP->next;
 
         if (clientP->endOfLife <= currentTime)
         {
-            contextP->clientList = (lwm2m_client_t *)LWM2M_LIST_RM(contextP->clientList, clientP->internalID, NULL);
+            contextP->clientListX = (lwm2m_client_t *)LWM2M_LIST_RM(contextP->clientListX, clientP->internalID, NULL);
+            remove_client(contextP, clientP->internalID);
             if (contextP->monitorCallback != NULL)
             {
                 contextP->monitorCallback(clientP->internalID, NULL, COAP_202_DELETED, LWM2M_CONTENT_TEXT, NULL, 0, contextP->monitorUserData);

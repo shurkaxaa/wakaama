@@ -54,6 +54,7 @@
 
 #include "liblwm2m.h"
 #include "lwm2m_api.h"
+#include "hashmap.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -171,7 +172,7 @@ static void prv_dump_client(lwm2m_client_t *targetP, lwm2m_context_t *ctx, Callb
 {
     lwm2m_client_object_t *objectP;
 
-/*    fprintf(stdout, "Client #%d:\r\n", targetP->internalID);
+    fprintf(stdout, "Client #%d:\r\n", targetP->internalID);
     fprintf(stdout, "\tname: \"%s\"\r\n", targetP->name);
     fprintf(stdout, "\tversion: \"%s\"\r\n", prv_dump_version(targetP->version));
     prv_dump_binding(targetP->binding);
@@ -179,7 +180,7 @@ static void prv_dump_client(lwm2m_client_t *targetP, lwm2m_context_t *ctx, Callb
     if (targetP->altPath) fprintf(stdout, "\talternative path: \"%s\"\r\n", targetP->altPath);
     fprintf(stdout, "\tlifetime: %d sec\r\n", targetP->lifetime);
     fprintf(stdout, "\tobjects: ");
-*/
+
     for (objectP = targetP->objectList; objectP != NULL; objectP = objectP->next)
     {
         if (objectP->instanceList == NULL)
@@ -189,49 +190,13 @@ static void prv_dump_client(lwm2m_client_t *targetP, lwm2m_context_t *ctx, Callb
         else
         {
             lwm2m_list_t *instanceP;
-
             for (instanceP = objectP->instanceList; instanceP != NULL; instanceP = instanceP->next)
             {
-                // fprintf(stdout, "/%d/%d, ", objectP->id, instanceP->id);
-                // TODO xaa. auto-observe for all but /1/0
-                if (ctx != NULL)
-                {
-                    if (objectP->id == 1 && instanceP->id == 0)
-                    {
-                        continue;
-                    }
-                    lwm2m_uri_t uri;
-                    memset(&uri, 0xFF, sizeof(lwm2m_uri_t));
-                    uri.objectId = objectP->id;
-                    uri.instanceId = instanceP->id;
-
-                    ZF_LOGD("Send observe to /%d/%d\n", uri.objectId, uri.instanceId);
-                    // int result = lwm2m_observe(ctx, targetP->internalID, &uri, prv_notify_callback, NULL);
-                    int result = lwm2m_observe(ctx, targetP->internalID, &uri, cb->notifyCallback, NULL);
-
-                    if (result == 0)
-                    {
-                        ZF_LOGD("Send observe to /%d/%d - OK\n", uri.objectId, uri.instanceId);
-                    }
-                    else
-                    {
-                        ZF_LOGE("Send observe to /%d/%d - ERROR - code: %d\n", objectP->id, instanceP->id, result);
-                        prv_print_error(result);
-                    }
-
-                    uri.objectId = 3;
-                    uri.instanceId = 0;
-                    result = lwm2m_dm_read(ctx, targetP->internalID, &uri, prv_result_callback, NULL);
-                    if (result == 0)
-                    {
-                        ZF_LOGD("Read to /%d/%d - OK\n", uri.objectId, uri.instanceId);
-                    }
-                    else
-                    {
-                        ZF_LOGE("Read to /%d/%d - ERROR - code: %d\n", objectP->id, instanceP->id, result);
-                        prv_print_error(result);
-                    }
-                }
+                lwm2m_uri_t uri;
+                memset(&uri, 0xFF, sizeof(lwm2m_uri_t));
+                uri.objectId = objectP->id;
+                uri.instanceId = instanceP->id;
+                fprintf(stdout, "Resource /%d/%d\n", uri.objectId, uri.instanceId);
             }
         }
     }
@@ -243,7 +208,7 @@ static void prv_output_clients(char *buffer,
     lwm2m_context_t *lwm2mH = (lwm2m_context_t *)user_data;
     lwm2m_client_t *targetP;
 
-    targetP = lwm2mH->clientList;
+    targetP = lwm2mH->clientListX;
 
     if (targetP == NULL)
     {
@@ -251,7 +216,7 @@ static void prv_output_clients(char *buffer,
         return;
     }
 
-    for (targetP = lwm2mH->clientList; targetP != NULL; targetP = targetP->next)
+    for (targetP = lwm2mH->clientListX; targetP != NULL; targetP = targetP->next)
     {
         prv_dump_client(targetP, NULL, NULL);
     }
@@ -460,7 +425,8 @@ static void prv_do_write_client(char *buffer,
     if (count > 0)
     {
         lwm2m_client_t *clientP = NULL;
-        clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)lwm2mH->clientList, clientId);
+        // clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)lwm2mH->clientList, clientId);
+        clientP = lookup_client(lwm2mH, clientId);
         if (clientP != NULL)
         {
             lwm2m_media_type_t format = clientP->format;
@@ -1012,6 +978,66 @@ syntax_error:
     fprintf(stdout, "Syntax error !");
 }
 
+int registration_callback(lwm2m_context_t *contextP, lwm2m_client_t *targetP, void *userData)
+{
+    printf("===================== registration_callback ====================== %p %p %p\n", contextP, targetP, userData);
+    lwm2m_client_object_t *objectP;
+    MonitorData *md = (MonitorData *)userData;
+    for (objectP = targetP->objectList; objectP != NULL; objectP = objectP->next)
+    {
+        if (objectP->instanceList == NULL)
+        {
+            fprintf(stdout, "/%d, ", objectP->id);
+        }
+        else
+        {
+            lwm2m_list_t *instanceP;
+
+            for (instanceP = objectP->instanceList; instanceP != NULL; instanceP = instanceP->next)
+            {
+                if (contextP != NULL)
+                {
+                    if (objectP->id == 1 && instanceP->id == 0)
+                    {
+                        continue;
+                    }
+                    lwm2m_uri_t uri;
+                    memset(&uri, 0xFF, sizeof(lwm2m_uri_t));
+                    uri.objectId = objectP->id;
+                    uri.instanceId = instanceP->id;
+
+                    ZF_LOGD("Send observe to /%d/%d\n", uri.objectId, uri.instanceId);
+                    int result = lwm2m_observe(contextP, targetP->internalID, &uri, md->cb->notifyCallback, NULL);
+
+                    if (result == 0)
+                    {
+                        ZF_LOGD("Send observe to /%d/%d - OK\n", uri.objectId, uri.instanceId);
+                    }
+                    else
+                    {
+                        ZF_LOGE("Send observe to /%d/%d - ERROR - code: %d\n", objectP->id, instanceP->id, result);
+                        prv_print_error(result);
+                    }
+
+                    uri.objectId = 3;
+                    uri.instanceId = 0;
+                    result = lwm2m_dm_read(contextP, targetP->internalID, &uri, prv_result_callback, NULL);
+                    if (result == 0)
+                    {
+                        ZF_LOGD("Read to /%d/%d - OK\n", uri.objectId, uri.instanceId);
+                    }
+                    else
+                    {
+                        ZF_LOGE("Read to /%d/%d - ERROR - code: %d\n", objectP->id, instanceP->id, result);
+                        prv_print_error(result);
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
 static void prv_monitor_callback(uint16_t clientID,
                                  lwm2m_uri_t *uriP,
                                  int status,
@@ -1020,18 +1046,16 @@ static void prv_monitor_callback(uint16_t clientID,
                                  int dataLength,
                                  void *userData)
 {
-    MonitorData *md = (MonitorData *) userData;
+    MonitorData *md = (MonitorData *)userData;
     lwm2m_context_t *lwm2mH = md->lwm2mH;
     lwm2m_client_t *targetP;
 
     switch (status)
     {
     case COAP_201_CREATED:
-        // fprintf(stdout, "\r\nNew client #%d registered.\r\n", clientID);
-
-        targetP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)lwm2mH->clientList, clientID);
-
-        prv_dump_client(targetP, lwm2mH, md->cb);
+        fprintf(stdout, "\r\nNew client #%d registered.\r\n", clientID);
+        //        targetP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)lwm2mH->clientList, clientID);
+        //        prv_dump_client(targetP, lwm2mH, md->cb);
         break;
 
     case COAP_202_DELETED:
@@ -1041,7 +1065,8 @@ static void prv_monitor_callback(uint16_t clientID,
     case COAP_204_CHANGED:
         fprintf(stdout, "\r\nClient #%d updated.\r\n", clientID);
 
-        targetP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)lwm2mH->clientList, clientID);
+        // targetP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)lwm2mH->clientList, clientID);
+        targetP = lookup_client(lwm2mH, clientID);
 
         prv_dump_client(targetP, NULL, NULL);
         break;
@@ -1223,6 +1248,7 @@ int run_server(Callbacks cb)
 
     lwm2m_set_monitoring_callback(lwm2mH, prv_monitor_callback, &monitorUserData);
     lwm2m_set_aa_callback(lwm2mH, cb.aaCallback, NULL);
+    lwm2m_set_registered_callback(lwm2mH, registration_callback, &monitorUserData);
 
     while (0 == g_quit)
     {

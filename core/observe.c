@@ -914,9 +914,10 @@ static void prv_obsRequestCallback(lwm2m_context_t * contextP,
 
     (void)contextP; /* unused */
 
-    clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)observationData->contextP->clientList, observationData->client);
-    if (clientP == NULL)
+    // clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)observationData->contextP->clientList, observationData->client);
+    clientP = lookup_client(observationData->contextP, observationData->client);
     {
+    if (clientP == NULL)
         ZF_LOGD("COAP_500_INTERNAL_SERVER_ERROR\n");
         observationData->callback(observationData->client,
                                   &observationData->uri,
@@ -1013,7 +1014,8 @@ static void prv_obsCancelRequestCallback(lwm2m_context_t * contextP,
     cancellation_data_t * cancelP = (cancellation_data_t *)transacP->userData;
     coap_packet_t * packet = (coap_packet_t *)message;
     uint8_t code;
-    lwm2m_client_t * clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)cancelP->contextP->clientList, cancelP->client);
+    // lwm2m_client_t * clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)cancelP->contextP->clientList, cancelP->client);
+    lwm2m_client_t * clientP = lookup_client(cancelP->contextP, cancelP->client);
 
     (void)contextP; /* unused */
 
@@ -1078,7 +1080,8 @@ int lwm2m_observe(lwm2m_context_t * contextP,
 
     if (!LWM2M_URI_IS_SET_INSTANCE(uriP) && LWM2M_URI_IS_SET_RESOURCE(uriP)) return COAP_400_BAD_REQUEST;
 
-    clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)contextP->clientList, clientID);
+    // clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)contextP->clientList, clientID);
+    clientP = lookup_client(contextP, clientID);
     if (clientP == NULL) return COAP_404_NOT_FOUND;
 
     observationP = prv_findObservationByURI(clientP, uriP);
@@ -1151,7 +1154,8 @@ int lwm2m_observe_cancel(lwm2m_context_t * contextP,
     LOG_ARG("clientID: %d", clientID);
     LOG_URI(uriP);
 
-    clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)contextP->clientList, clientID);
+    // clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)contextP->clientList, clientID);
+    clientP = lookup_client(contextP, clientID);
     if (clientP == NULL) return COAP_404_NOT_FOUND;
 
     observationP = prv_findObservationByURI(clientP, uriP);
@@ -1243,7 +1247,8 @@ bool observe_handleNotify(lwm2m_context_t * contextP,
     clientID = (tokenP[0] << 8) | tokenP[1];
     obsID = (tokenP[2] << 8) | tokenP[3];
 
-    clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)contextP->clientList, clientID);
+    // clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)contextP->clientList, clientID);
+    clientP = lookup_client(contextP, clientID);
     if (clientP == NULL) return false;
 
     observationP = (lwm2m_observation_t *)lwm2m_list_find((lwm2m_list_t *)clientP->observationList, obsID);

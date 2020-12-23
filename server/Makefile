@@ -1,9 +1,12 @@
 SHELL = /bin/sh
 CC    = gcc
+
+ifneq ($(DEBUG),)
+DEBUGFLAGS   = -O0 -D _DEBUG -DLWM2M_WITH_LOGS
+endif
+DEBUGFLAGS = -O3 -D NDEBUG -fwhole-program
 FLAGS        = #-std=gnu99 -Iinclude
-CFLAGS       = -I ../lib -I ../core -I ../examples/shared -fPIC -g -DLWM2M_SERVER_MODE -DLWM2M_LITTLE_ENDIAN
-DEBUGFLAGS   = -O0 -D _DEBUG
-RELEASEFLAGS = -O2 -D NDEBUG -combine -fwhole-program
+CFLAGS       = -I ../lib -I ../core -I ../examples/shared -fPIC -g -DLWM2M_SERVER_MODE -DLWM2M_LITTLE_ENDIAN $(DEBUGFLAGS)
 LDFLAGS      = -lwakaama -L ../build
 
 TARGET  = ../build/server
@@ -26,4 +29,4 @@ clean:
 
 .PHONY : run
 run:
-	LD_LIBRARY_PATH=$LD_LIBRARY_PATH:../lib ./server
+	LD_LIBRARY_PATH=$LD_LIBRARY_PATH:../build ../build/server
