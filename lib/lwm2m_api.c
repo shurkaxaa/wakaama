@@ -1290,6 +1290,8 @@ int run_server(Callbacks cb)
     lwm2m_set_monitoring_callback(lwm2mH, prv_monitor_callback, &monitorUserData);
     lwm2m_set_aa_callback(lwm2mH, cb.aaCallback, NULL);
     lwm2m_set_registered_callback(lwm2mH, registration_callback, &monitorUserData);
+    lwm2m_set_connected_callback(lwm2mH, cb.connectedCallback);
+    lwm2m_set_disconnected_callback(lwm2mH, cb.disconnectedCallback);
 
     while (0 == g_quit)
     {

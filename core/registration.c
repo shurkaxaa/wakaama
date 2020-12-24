@@ -1728,6 +1728,10 @@ uint8_t registration_handleRequest(lwm2m_context_t * contextP,
             {
                 contextP->registeredCallback(contextP, clientP, contextP->registeredUserData);
             }
+            if (contextP->connectedCallback != NULL)
+            {
+                contextP->connectedCallback(clientP->name);
+            }
             result = COAP_201_CREATED;
         }
         else
@@ -1828,13 +1832,17 @@ uint8_t registration_handleRequest(lwm2m_context_t * contextP,
         if (LWM2M_URI_IS_SET_INSTANCE(uriP)) return COAP_400_BAD_REQUEST;
 
         contextP->clientListX = (lwm2m_client_t *)LWM2M_LIST_RM(contextP->clientListX, uriP->objectId, &clientP);
-        remove_client(contextP, uriP->objectId);
         if (clientP == NULL)
             return COAP_400_BAD_REQUEST;
         if (contextP->monitorCallback != NULL)
         {
             contextP->monitorCallback(clientP->internalID, NULL, COAP_202_DELETED, LWM2M_CONTENT_TEXT, NULL, 0, contextP->monitorUserData);
         }
+        if (contextP->disconnectedCallback != NULL)
+        {
+            contextP->disconnectedCallback(clientP->name);
+        }
+        remove_client(contextP, uriP->objectId);
         registration_freeClient(clientP);
         result = COAP_202_DELETED;
     }
@@ -1988,6 +1996,10 @@ void registration_step(lwm2m_context_t * contextP,
             if (contextP->monitorCallback != NULL)
             {
                 contextP->monitorCallback(clientP->internalID, NULL, COAP_202_DELETED, LWM2M_CONTENT_TEXT, NULL, 0, contextP->monitorUserData);
+            }
+            if (contextP->disconnectedCallback != NULL)
+            {
+                contextP->disconnectedCallback(clientP->name);
             }
             registration_freeClient(clientP);
         }
