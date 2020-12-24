@@ -3,23 +3,27 @@
 
 #include "liblwm2m.h"
 
-typedef void (*NotifyCallback)(uint16_t clientID,
-                                lwm2m_uri_t *uriP,
-                                int count,
-                                lwm2m_media_type_t format,
-                                uint8_t *data,
-                                int dataLength,
-                                void *userData);
+typedef void (*NotifyCallback)(
+    char *endpoint,
+    // lwm2m_media_type_t format,
+    uint8_t *data,
+    int dataLength);
 
 typedef int (*AACallback)(
-  char *endpoint,
-  uint8_t *authCode,
-  size_t authCodeLen,
-  void *userData);
+    char *endpoint,
+    uint8_t *authCode,
+    size_t authCodeLen,
+    void *userData);
 
-typedef struct {
+typedef int (*ConnectedCallback)(char *endpoint);
+typedef int (*DisconnectedCallback)(char *endpoint);
+
+typedef struct
+{
   NotifyCallback notifyCallback;
   AACallback aaCallback;
+  ConnectedCallback connectedCallback;
+  DisconnectedCallback disconnectedCallback;
   /*
   1. register/deregister callback?
   2. dynamic read/write/execute/observe/notify/... callbacks for downstream?

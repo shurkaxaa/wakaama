@@ -1853,6 +1853,16 @@ void lwm2m_set_aa_callback(lwm2m_context_t * contextP, lwm2m_aa_callback_t callb
     contextP->aaUserData = userData;
 }
 
+void lwm2m_set_connected_callback(lwm2m_context_t * contextP, lwm2m_endpoint_callback_t callback)
+{
+    contextP->connectedCallback = callback;
+}
+
+void lwm2m_set_disconnected_callback(lwm2m_context_t * contextP, lwm2m_endpoint_callback_t callback)
+{
+    contextP->disconnectedCallback = callback;
+}
+
 void lwm2m_set_registered_callback(lwm2m_context_t * contextP, lwm2m_registered_callback_t callback, void * userData)
 {
     contextP->registeredCallback = callback;

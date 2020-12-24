@@ -1,17 +1,10 @@
 #include "lwm2m_api.h"
 #include "log.h"
 
-static void prv_notify_callback(uint16_t clientID,
-                                lwm2m_uri_t *uriP,
-                                int count,
-                                lwm2m_media_type_t format,
-                                uint8_t *data,
-                                int dataLength,
-                                void *userData)
+static void prv_notify_callback(char *endpoint, uint8_t *data, int dataLength)
 {
-    ZF_LOGD("Notify from client #%d ", clientID);
+    ZF_LOGD("Notify from client #%s ", endpoint);
     // prv_printUri(uriP);
-    ZF_LOGD(" number %d\n", count);
     // output_data(stdout, format, data, dataLength, 1);
     ZF_LOGD("\n> ");
 }

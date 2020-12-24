@@ -293,12 +293,20 @@ static void prv_notify_callback(uint16_t clientID,
                                 int dataLength,
                                 void *userData)
 {
-    return;
+    lwm2m_client_t *clientP = NULL;
+    MonitorData *md = (MonitorData *)userData;
     ZF_LOGD("Notify from client #%d ", clientID);
     // prv_printUri(uriP);
     ZF_LOGD(" number %d\n", count);
     // output_data(stdout, format, data, dataLength, 1);
     ZF_LOGD("\n> ");
+    if (md->cb->notifyCallback != NULL)
+    {
+        clientP = lookup_client(md->lwm2mH, clientID);
+        md->cb->notifyCallback(clientP->name, data, dataLength);
+    }
+
+    // int result = lwm2m_observe(contextP, targetP->internalID, &uri, md->cb->notifyCallback, NULL);
     fflush(stdout);
 }
 
@@ -1010,7 +1018,8 @@ int registration_callback(lwm2m_context_t *contextP, lwm2m_client_t *targetP, vo
                     uri.instanceId = instanceP->id;
 
                     ZF_LOGD("Send observe to /%d/%d\n", uri.objectId, uri.instanceId);
-                    int result = lwm2m_observe(contextP, targetP->internalID, &uri, md->cb->notifyCallback, NULL);
+                    // int result = lwm2m_observe(contextP, targetP->internalID, &uri, md->cb->notifyCallback, NULL);
+                    int result = lwm2m_observe(contextP, targetP->internalID, &uri, prv_notify_callback, userData);
 
                     if (result == 0)
                     {
@@ -1057,12 +1066,20 @@ static void prv_monitor_callback(uint16_t clientID,
     {
     case COAP_201_CREATED:
         fprintf(stdout, "\r\nNew client #%d registered.\r\n", clientID);
-        //        targetP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)lwm2mH->clientList, clientID);
-        //        prv_dump_client(targetP, lwm2mH, md->cb);
+        if (md->cb->connectedCallback != NULL)
+        {
+            targetP = lookup_client(lwm2mH, clientID);
+            md->cb->connectedCallback(targetP->name);
+        }
         break;
 
     case COAP_202_DELETED:
         fprintf(stdout, "\r\nClient #%d unregistered.\r\n", clientID);
+        if (md->cb->disconnectedCallback != NULL)
+        {
+            targetP = lookup_client(lwm2mH, clientID);
+            md->cb->disconnectedCallback(targetP->name);
+        }
         break;
 
     case COAP_204_CHANGED:
@@ -1341,10 +1358,13 @@ int run_server(Callbacks cb)
                     //                    output_buffer(stderr, buffer, numBytes, 0);
                     connFilterP = &(connection_t){.mapKey = &addr, .addrLen = addrLen};
                     mapP = (connection_t **)hashmap_get(connMap, &connFilterP);
-                    if (mapP != NULL) {
+                    if (mapP != NULL)
+                    {
                         ZF_LOGD("Connection pointer found in MAP %p>>>>>>>>>>>>>>>>>>\n", connP);
                         connP = *mapP;
-                    } else {
+                    }
+                    else
+                    {
                         connP = NULL;
                     }
                     if (connP != NULL)

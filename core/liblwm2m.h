@@ -556,6 +556,7 @@ typedef struct _lwm2m_context_ lwm2m_context_t;
 typedef void (*lwm2m_result_callback_t) (uint16_t clientID, lwm2m_uri_t * uriP, int status, lwm2m_media_type_t format, uint8_t * data, int dataLength, void * userData);
 
 typedef int (*lwm2m_aa_callback_t) (char *endpointName, uint8_t *authCode, size_t authCodeLen, void *userData);
+typedef int (*lwm2m_endpoint_callback_t) (char *endpointName);
 
 /*
  * LWM2M Observations
@@ -753,6 +754,9 @@ struct _lwm2m_context_
     time_t lastEolCheck;
     time_t lastTransactionRetransCheck;
 
+    lwm2m_endpoint_callback_t     connectedCallback;
+    lwm2m_endpoint_callback_t     disconnectedCallback;
+
 #endif
 #ifdef LWM2M_BOOTSTRAP_SERVER_MODE
     lwm2m_bootstrap_callback_t bootstrapCallback;
@@ -801,6 +805,9 @@ void lwm2m_resource_value_changed(lwm2m_context_t * contextP, lwm2m_uri_t * uriP
 void lwm2m_set_monitoring_callback(lwm2m_context_t * contextP, lwm2m_result_callback_t callback, void * userData);
 void lwm2m_set_aa_callback(lwm2m_context_t * contextP, lwm2m_aa_callback_t callback, void * userData);
 void lwm2m_set_registered_callback(lwm2m_context_t * contextP, lwm2m_registered_callback_t callback, void * userData);
+
+void lwm2m_set_connected_callback(lwm2m_context_t * contextP, lwm2m_endpoint_callback_t callback);
+void lwm2m_set_disconnected_callback(lwm2m_context_t * contextP, lwm2m_endpoint_callback_t callback);
 
 // Device Management APIs
 int lwm2m_dm_read(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP, lwm2m_result_callback_t callback, void * userData);
