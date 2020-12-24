@@ -9,11 +9,11 @@ static void prv_notify_callback(uint16_t clientID,
                                 int dataLength,
                                 void *userData)
 {
-    ZF_LOGE("Notify from client #%d ", clientID);
+    ZF_LOGD("Notify from client #%d ", clientID);
     // prv_printUri(uriP);
-    ZF_LOGE(" number %d\n", count);
+    ZF_LOGD(" number %d\n", count);
     // output_data(stdout, format, data, dataLength, 1);
-    ZF_LOGE("\n> ");
+    ZF_LOGD("\n> ");
 }
 
 int main(int argc, char *argv[])

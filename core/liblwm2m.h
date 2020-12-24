@@ -749,6 +749,10 @@ struct _lwm2m_context_
     void *aaUserData;
     lwm2m_registered_callback_t     registeredCallback;
     void *registeredUserData;
+
+    time_t lastEolCheck;
+    time_t lastTransactionRetransCheck;
+
 #endif
 #ifdef LWM2M_BOOTSTRAP_SERVER_MODE
     lwm2m_bootstrap_callback_t bootstrapCallback;

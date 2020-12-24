@@ -1869,6 +1869,8 @@ void lwm2m_set_monitoring_callback(lwm2m_context_t * contextP,
 }
 #endif
 
+#define MIN_EOL_CHECK 10
+
 // for each server update the registration if needed
 // for each client check if the registration expired
 void registration_step(lwm2m_context_t * contextP,
@@ -1954,8 +1956,16 @@ void registration_step(lwm2m_context_t * contextP,
     lwm2m_client_t * clientP;
 
     LOG("Entering");
+    // optimize - check all clients EOL on each packet/transaction?
+    // do now waste CPU on non-emergent cases
+    if ( (currentTime - contextP->lastEolCheck) < MIN_EOL_CHECK) {
+        *timeoutP = MIN_EOL_CHECK;
+        return;
+    }
+    LOG("Check EOL time arrived\n");
+    contextP->lastEolCheck = currentTime;
+
     // monitor clients lifetime
-    // TODO, optimize? check all clients EOL on each packet/transaction?
     clientP = contextP->clientListX;
     while (clientP != NULL)
     {
@@ -1985,6 +1995,5 @@ void registration_step(lwm2m_context_t * contextP,
         clientP = nextP;
     }
 #endif
-
 }
 
