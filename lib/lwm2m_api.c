@@ -1066,20 +1066,10 @@ static void prv_monitor_callback(uint16_t clientID,
     {
     case COAP_201_CREATED:
         fprintf(stdout, "\r\nNew client #%d registered.\r\n", clientID);
-        if (md->cb->connectedCallback != NULL)
-        {
-            targetP = lookup_client(lwm2mH, clientID);
-            md->cb->connectedCallback(targetP->name);
-        }
         break;
 
     case COAP_202_DELETED:
         fprintf(stdout, "\r\nClient #%d unregistered.\r\n", clientID);
-        if (md->cb->disconnectedCallback != NULL)
-        {
-            targetP = lookup_client(lwm2mH, clientID);
-            md->cb->disconnectedCallback(targetP->name);
-        }
         break;
 
     case COAP_204_CHANGED:
