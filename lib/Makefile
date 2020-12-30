@@ -8,8 +8,9 @@ DEBUGFLAGS = -O3 -D NDEBUG #-fwhole-program
 endif
 
 FLAGS        = #-std=gnu99 -Iinclude
+#CFLAGS       = -pthread -I ../core -I ../examples/shared -fPIC -g -DLWM2M_SERVER_MODE -DLWM2M_LITTLE_ENDIAN -std=gnu99 $(DEBUGFLAGS)
 CFLAGS       = -I ../core -I ../examples/shared -fPIC -g -DLWM2M_SERVER_MODE -DLWM2M_LITTLE_ENDIAN -std=gnu99 $(DEBUGFLAGS)
-LDFLAGS      = -shared
+LDFLAGS      = -shared -lpthread
 
 TARGET  = ../build/libwakaama.so
 SOURCES = $(shell echo ../core/*.c ../examples/shared/*.c ../core/er-coap-13/*.c *.c)

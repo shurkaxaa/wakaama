@@ -17,6 +17,7 @@ typedef int (*AACallback)(
 
 typedef int (*ConnectedCallback)(char *endpoint);
 typedef int (*DisconnectedCallback)(char *endpoint);
+typedef void (*ReadCallback)(int status, uint8_t *data, int dataLength, void *user_data);
 
 typedef struct
 {
@@ -24,11 +25,19 @@ typedef struct
   AACallback aaCallback;
   ConnectedCallback connectedCallback;
   DisconnectedCallback disconnectedCallback;
+  ReadCallback readCallback;
   /*
-  1. register/deregister callback?
-  2. dynamic read/write/execute/observe/notify/... callbacks for downstream?
+  1. dynamic write/execute/observe/notify/... callbacks for downstream?
   */
 } Callbacks;
 
 int run_server(Callbacks cb);
+
+int iotts_lwm2m_read(char *endpoint,
+                      int32_t objId,
+                      int32_t intId,
+                      int32_t resId,
+                      int timeout,
+                      void *user_data);
+
 #endif

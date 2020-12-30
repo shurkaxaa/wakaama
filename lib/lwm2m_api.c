@@ -71,6 +71,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <inttypes.h>
+#include <pthread.h>
 
 #include "commandline.h"
 #include "connection.h"
@@ -79,13 +80,19 @@
 
 #define MAX_PACKET_SIZE 1024
 
+static lwm2m_context_t *lwm2mH = NULL;
+static struct hashmap *connMap;
+static struct hashmap *clientByEndpointMap;
+static pthread_mutex_t lock;
 static int g_quit = 0;
+static Callbacks *lwm2m_callbacks = NULL;
 
 typedef struct
 {
-    lwm2m_context_t *lwm2mH;
-    Callbacks *cb;
-} MonitorData;
+    uint16_t clientId;
+    char *endpoint;
+    size_t endpointLen;
+} endpoint_t;
 
 static void prv_print_error(uint8_t status)
 {
@@ -294,19 +301,24 @@ static void prv_notify_callback(uint16_t clientID,
                                 void *userData)
 {
     lwm2m_client_t *clientP = NULL;
-    MonitorData *md = (MonitorData *)userData;
+    lwm2m_context_t *lwm2mH = (lwm2m_context_t *)userData;
     ZF_LOGD("Notify from client #%d ", clientID);
     // prv_printUri(uriP);
     ZF_LOGD(" number %d\n", count);
     // output_data(stdout, format, data, dataLength, 1);
     ZF_LOGD("\n> ");
-    if (md->cb->notifyCallback != NULL)
+    if (lwm2m_callbacks != NULL && lwm2m_callbacks->notifyCallback != NULL)
     {
-        clientP = lookup_client(md->lwm2mH, clientID);
-        md->cb->notifyCallback(clientP->name, data, dataLength);
+        clientP = lookup_client(lwm2mH, clientID);
+        if (clientP == NULL)
+        {
+            ZF_LOGD("Client not found in cache #%d ", clientID);
+        }
+        else
+        {
+            lwm2m_callbacks->notifyCallback(clientP->name, data, dataLength);
+        }
     }
-
-    // int result = lwm2m_observe(contextP, targetP->internalID, &uri, md->cb->notifyCallback, NULL);
     fflush(stdout);
 }
 
@@ -991,9 +1003,16 @@ syntax_error:
 
 int registration_callback(lwm2m_context_t *contextP, lwm2m_client_t *targetP, void *userData)
 {
-    ZF_LOGD("===================== registration_callback ====================== %p %p %p\n", contextP, targetP, userData);
+    ZF_LOGD("===================== registration_callback ====================== %p %p %p\n",
+            contextP, targetP, userData);
+    hashmap_set(clientByEndpointMap, &(endpoint_t){
+                                         .clientId = targetP->internalID,
+                                         .endpoint = targetP->name,
+                                         .endpointLen = strlen(targetP->name)});
+
+    return 0;
+    // TODO, move to go registration callback
     lwm2m_client_object_t *objectP;
-    MonitorData *md = (MonitorData *)userData;
     for (objectP = targetP->objectList; objectP != NULL; objectP = objectP->next)
     {
         if (objectP->instanceList == NULL)
@@ -1018,7 +1037,6 @@ int registration_callback(lwm2m_context_t *contextP, lwm2m_client_t *targetP, vo
                     uri.instanceId = instanceP->id;
 
                     ZF_LOGD("Send observe to /%d/%d\n", uri.objectId, uri.instanceId);
-                    // int result = lwm2m_observe(contextP, targetP->internalID, &uri, md->cb->notifyCallback, NULL);
                     int result = lwm2m_observe(contextP, targetP->internalID, &uri, prv_notify_callback, userData);
 
                     if (result == 0)
@@ -1058,8 +1076,7 @@ static void prv_monitor_callback(uint16_t clientID,
                                  int dataLength,
                                  void *userData)
 {
-    MonitorData *md = (MonitorData *)userData;
-    lwm2m_context_t *lwm2mH = md->lwm2mH;
+    lwm2m_context_t *lwm2mH = (lwm2m_context_t *)userData;
     lwm2m_client_t *targetP;
 
     switch (status)
@@ -1074,10 +1091,7 @@ static void prv_monitor_callback(uint16_t clientID,
 
     case COAP_204_CHANGED:
         fprintf(stdout, "\r\nClient #%d updated.\r\n", clientID);
-
-        // targetP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)lwm2mH->clientList, clientID);
         targetP = lookup_client(lwm2mH, clientID);
-
         prv_dump_client(targetP, NULL, NULL);
         break;
 
@@ -1127,6 +1141,24 @@ int conn_compare(const void *a, const void *b, void *udata)
     return memcmp(ua->mapKey, ub->mapKey, ua->addrLen);
 }
 
+uint64_t endpoint_hash(const void *item, uint64_t seed0, uint64_t seed1)
+{
+    const endpoint_t *endpoint = (endpoint_t *)item;
+    uint64_t rv = hashmap_sip(endpoint->endpoint, endpoint->endpointLen, seed0, seed1);
+    return rv;
+}
+
+int endpoint_compare(const void *a, const void *b, void *udata)
+{
+    const endpoint_t *ua = (endpoint_t *)a;
+    const endpoint_t *ub = (endpoint_t *)b;
+    if (ua->endpointLen != ub->endpointLen)
+    {
+        return ua->endpointLen > ub->endpointLen ? -1 : 1;
+    }
+    return memcmp(ua->endpoint, ub->endpoint, ua->endpointLen);
+}
+
 int run_server(Callbacks cb)
 {
     int sock;
@@ -1135,18 +1167,17 @@ int run_server(Callbacks cb)
     int result;
     int argc = 0;
     char **argv = NULL;
-    lwm2m_context_t *lwm2mH = NULL;
     int i;
     connection_t *connList = NULL;
-    struct hashmap *connMap;
     int addressFamily = AF_INET6;
     int opt;
     const char *localPort = LWM2M_STANDARD_PORT_STR;
-    MonitorData monitorUserData;
-    monitorUserData.cb = &cb;
-    monitorUserData.lwm2mH = NULL;
+
+    lwm2m_callbacks = &cb;
+    pthread_mutex_init(&lock, NULL);
 
     connMap = hashmap_new(sizeof(connection_t *), 0, 0, 0, conn_hash, conn_compare, NULL);
+    clientByEndpointMap = hashmap_new(sizeof(endpoint_t), 0, 0, 0, endpoint_hash, endpoint_compare, NULL);
 
     command_desc_t commands[] =
         {
@@ -1266,7 +1297,6 @@ int run_server(Callbacks cb)
         fprintf(stderr, "lwm2m_init() failed\r\n");
         return -1;
     }
-    monitorUserData.lwm2mH = lwm2mH;
 
     signal(SIGINT, handle_sigint);
 
@@ -1277,9 +1307,9 @@ int run_server(Callbacks cb)
     fprintf(stdout, "> ");
     fflush(stdout);
 
-    lwm2m_set_monitoring_callback(lwm2mH, prv_monitor_callback, &monitorUserData);
+    lwm2m_set_monitoring_callback(lwm2mH, prv_monitor_callback, lwm2mH);
     lwm2m_set_aa_callback(lwm2mH, cb.aaCallback, NULL);
-    lwm2m_set_registered_callback(lwm2mH, registration_callback, &monitorUserData);
+    lwm2m_set_registered_callback(lwm2mH, registration_callback, lwm2mH);
     lwm2m_set_connected_callback(lwm2mH, cb.connectedCallback);
     lwm2m_set_disconnected_callback(lwm2mH, cb.disconnectedCallback);
 
@@ -1382,7 +1412,9 @@ int run_server(Callbacks cb)
                     ZF_LOGD("Connection found %p>>>>>>>>>>>>>>>>>>\n", connP);
                     if (connP != NULL)
                     {
+                        pthread_mutex_lock(&lock);
                         lwm2m_handle_packet(lwm2mH, buffer, numBytes, connP);
+                        pthread_mutex_unlock(&lock);
                     }
                 }
             }
@@ -1393,7 +1425,9 @@ int run_server(Callbacks cb)
                 if (numBytes > 1)
                 {
                     buffer[numBytes] = 0;
+                    pthread_mutex_lock(&lock);
                     handle_command(commands, (char *)buffer);
+                    pthread_mutex_unlock(&lock);
                     fprintf(stdout, "\r\n");
                 }
                 if (g_quit == 0)
@@ -1421,5 +1455,81 @@ int run_server(Callbacks cb)
 #endif
 
     hashmap_free(connMap);
+    return 0;
+}
+
+typedef struct
+{
+    void *user_data;
+    ReadCallback cb;
+} ReadCallbackData;
+
+static void prv_read_callback(uint16_t clientID,
+                              lwm2m_uri_t *uriP,
+                              int status,
+                              lwm2m_media_type_t format,
+                              uint8_t *data,
+                              int dataLength,
+                              void *userData)
+{
+    ZF_LOGD("Read completed: status - %d, data l - %d\n", status, dataLength);
+    if (lwm2m_callbacks != NULL && lwm2m_callbacks->readCallback != NULL)
+    {
+        ZF_LOGD("Execute read callback: status - %d, data l - %d, ud: %p, cb: %p\n",
+                status, dataLength, userData, lwm2m_callbacks->readCallback);
+        lwm2m_callbacks->readCallback(status, data, dataLength, userData);
+    }
+}
+
+int iotts_lwm2m_read(char *endpoint,
+                     int32_t objId,
+                     int32_t instId,
+                     int32_t resId,
+                     int timeout,
+                     void *user_data)
+{
+    uint16_t clientId;
+    lwm2m_uri_t uri;
+    char *end = NULL;
+    endpoint_t *endpointP = NULL;
+    int result;
+    ReadCallbackData *callbackDataP = NULL;
+
+    memset(&uri, 0xFF, sizeof(lwm2m_uri_t));
+    uri.objectId = objId;
+    if (instId != -1)
+        uri.instanceId = instId;
+
+    if (resId != -1)
+        uri.resourceId = resId;
+
+    pthread_mutex_lock(&lock);
+    // lookup clientId by endpoint
+    endpointP = (endpoint_t *)hashmap_get(
+        clientByEndpointMap, &(endpoint_t){
+                                 .endpoint = endpoint,
+                                 .endpointLen = strlen(endpoint) // optimize by keep len outside and pass?
+                             });
+    if (endpointP == NULL)
+    {
+        ZF_LOGD("Can not find client by endpoint: %s\n", endpoint);
+        pthread_mutex_unlock(&lock);
+        return 1;
+    }
+    ZF_LOGD("Client found by endpoint: %s => id: %d", endpoint, endpointP->clientId);
+    result = lwm2m_dm_read(lwm2mH, endpointP->clientId, &uri, prv_read_callback, user_data);
+    ZF_LOGD("Read requested: %d/%d/%d status: %d\n", uri.objectId, uri.instanceId, uri.resourceId, result);
+    pthread_mutex_unlock(&lock);
+
+    if (result == 0)
+    {
+        fprintf(stdout, "OK\n");
+    }
+    else
+    {
+        prv_print_error(result);
+        return result;
+    }
+
     return 0;
 }
